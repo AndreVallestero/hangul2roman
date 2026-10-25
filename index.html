@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hangul → Romanization</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #282828;
+    color: #ebdbb2;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #3c3836;
+    background: #1d2021;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 650;
+    text-align: center;
+  }
+  main {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+  }
+  .pane {
+    flex: 1 1 50%;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 16px;
+  }
+  .pane + .pane { border-left: 1px solid #3c3836; }
+  .pane-label {
+    padding: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #a89984;
+  }
+  textarea, #output {
+    flex: 1;
+    border-radius: 12px;
+    border: 1px solid #3c3836;
+    background: #1d2021;
+    color: #ebdbb2;
+    padding: 14px;
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 280px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  textarea {
+    resize: none;
+    outline: none;
+  }
+  textarea::placeholder { color: #665c54; }
+  textarea:focus { border-color: #fabd2f; }
+  #output {
+    overflow-y: auto;
+    margin: 0;
+  }
+  .output-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    min-height: 280px;
+  }
+  .output-wrap #output {
+    flex: 1;
+    width: 100%;
+  }
+  #copyBtn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    background: #3c3836;
+    border: 1px solid #504945;
+    border-radius: 8px;
+    color: #bdae93;
+    cursor: pointer;
+    opacity: 0.85;
+    padding: 0;
+  }
+  #copyBtn:hover {
+    opacity: 1;
+    color: #fbf1c7;
+    background: #504945;
+  }
+  #copyBtn svg { width: 15px; height: 15px; }
+  #copyBtn .check { display: none; }
+  #copyBtn.copied .copy { display: none; }
+  #copyBtn.copied .check { display: block; }
+  #copyBtn.copied { color: #b8bb26; border-color: #b8bb26; }
+  @media (max-width: 700px) {
+    main { flex-direction: column; }
+    .pane + .pane { border-left: none; border-top: 1px solid #3c3836; }
+    textarea, #output { min-height: 220px; }
+    .output-wrap { min-height: 220px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Hangul → syllable-hyphenated romanization</h1>
+</header>
+<main>
+  <div class="pane">
+    <div class="pane-label">Input</div>
+    <textarea id="input" spellcheck="false" placeholder="Type here…"></textarea>
+  </div>
+  <div class="pane">
+    <div class="pane-label">Output</div>
+    <div class="output-wrap">
+      <div id="output" aria-live="polite"></div>
+      <button id="copyBtn" type="button" aria-label="Copy output" title="Copy output">
+        <svg class="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </button>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var CHO = ["g","kk","n","d","tt","r","m","b","pp","s","ss","","j","jj","ch","k","t","p","h"];
+  var JUNG = ["a","ae","ya","yae","eo","e","yeo","ye","o","wa","wae","oe","yo","u","wo","we","wi","yu","eu","ui","i"];
+  var JONG = ["","k","k","k","n","n","n","t","l","k","m","p","l","l","p","l","m","p","p","t","t","ng","t","t","k","t","p","h"];
+
+  function romanizeSyllable(ch) {
+    var s = ch.charCodeAt(0) - 0xAC00;
+    var cho = Math.floor(s / (21 * 28));
+    var jung = Math.floor((s % (21 * 28)) / 28);
+    var jong = s % 28;
+    return CHO[cho] + JUNG[jung] + JONG[jong];
+  }
+
+  function convert(text) {
+    var out = [];
+    var buf = [];
+    function flush() {
+      if (buf.length) {
+        out.push(buf.join("-"));
+        buf = [];
+      }
+    }
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      var code = text.charCodeAt(i);
+      if (code >= 0xD800 && code <= 0xDBFF && i + 1 < text.length) {
+        var low = text.charCodeAt(i + 1);
+        if (low >= 0xDC00 && low <= 0xDFFF) {
+          flush();
+          out.push(ch + text[i + 1]);
+          i++;
+          continue;
+        }
+      }
+      if (code >= 0xAC00 && code <= 0xD7A3) {
+        buf.push(romanizeSyllable(ch));
+      } else {
+        flush();
+        out.push(ch);
+      }
+    }
+    flush();
+    return out.join("");
+  }
+
+  var inputEl = document.getElementById("input");
+  var outputEl = document.getElementById("output");
+  var copyBtn = document.getElementById("copyBtn");
+
+  function update() {
+    outputEl.textContent = convert(inputEl.value);
+  }
+
+  inputEl.addEventListener("input", update);
+  copyBtn.addEventListener("click", function () {
+    function done() {
+      copyBtn.classList.add("copied");
+      setTimeout(function () { copyBtn.classList.remove("copied"); }, 1200);
+    }
+    var text = outputEl.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+    } else {
+      fallbackCopy(text, done);
+    }
+  });
+
+  function fallbackCopy(text, done) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { /* noop */ }
+    document.body.removeChild(ta);
+  }
+  update();
+})();
+</script>
+</body>
+</html>
